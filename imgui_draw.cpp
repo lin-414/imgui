@@ -4664,7 +4664,12 @@ static bool ImGui_ImplStbTrueType_FontSrcInit(ImFontAtlas* atlas, ImFontConfig* 
     if (src->MergeMode && src->SizePixels == 0.0f)
         src->SizePixels = ref_size;
 
-    bd_font_data->ScaleFactor = stbtt_ScaleForPixelHeight(&bd_font_data->FontInfo, 1.0f);
+    // Scale so the EM SQUARE maps to the requested pixel size (matches the
+    // FreeType NOMINAL request and CSS font-size semantics). The legacy
+    // ScaleForPixelHeight maps the ascender-to-descender span instead, which
+    // renders CJK fonts ~25% smaller than requested (msyh span = 1.32em) and
+    // crushed glyphs inside M3 line boxes.
+    bd_font_data->ScaleFactor = stbtt_ScaleForMappingEmToPixels(&bd_font_data->FontInfo, 1.0f);
     if (src->MergeMode && src->SizePixels != 0.0f && ref_size != 0.0f)
         bd_font_data->ScaleFactor *= src->SizePixels / ref_size; // FIXME-NEWATLAS: Should tidy up that a bit
     bd_font_data->ScaleFactor *= src->ExtraSizeScale;

@@ -439,7 +439,13 @@ static bool ImGui_ImplFreeType_FontBakedInit(ImFontAtlas* atlas, ImFontConfig* s
     // (FT_Set_Pixel_Sizes() essentially calls FT_Request_Size() with FT_SIZE_REQUEST_TYPE_NOMINAL)
     const float rasterizer_density = src->RasterizerDensity * baked->RasterizerDensity;
     FT_Size_RequestRec req;
-    req.type = (bd_font_data->UserFlags & ImGuiFreeTypeLoaderFlags_Bitmap) ? FT_SIZE_REQUEST_TYPE_NOMINAL : FT_SIZE_REQUEST_TYPE_REAL_DIM;
+    // Request the size so the EM SQUARE maps to `size` pixels (NOMINAL), not
+    // the ascender-to-descender span (REAL_DIM). ImGui's legacy span semantics
+    // render CJK fonts ~25% smaller than requested (msyh span = 1.32em), which
+    // crushed glyphs inside M3 line boxes and clipped dense bottom strokes.
+    // The M3 type scale (like CSS font-size) expects em semantics; layout
+    // boxes come from the M3 lineHeight tokens, not from the baked metrics.
+    req.type = FT_SIZE_REQUEST_TYPE_NOMINAL;
     req.width = 0;
     req.height = (uint32_t)(size * 64 * rasterizer_density);
     req.horiResolution = 0;
@@ -543,16 +549,16 @@ static bool ImGui_ImplFreeType_FontBakedLoadGlyph(ImFontAtlas* atlas, ImFontConf
         float recip_h = 1.0f / rasterizer_density;
         float recip_v = 1.0f / rasterizer_density;
 
-        // Register glyph
-        float glyph_off_x = (float)face->glyph->bitmap_left;
-        float glyph_off_y = (float)-face->glyph->bitmap_top;
-        out_glyph->X0 = glyph_off_x * recip_h + font_off_x;
-        out_glyph->Y0 = glyph_off_y * recip_v + font_off_y;
-        out_glyph->X1 = (glyph_off_x + w) * recip_h + font_off_x;
-        out_glyph->Y1 = (glyph_off_y + h) * recip_v + font_off_y;
-        out_glyph->Visible = true;
-        out_glyph->Colored = (ft_bitmap->pixel_mode == FT_PIXEL_MODE_BGRA);
-        out_glyph->PackId = pack_id;
+    // Register glyph
+    float glyph_off_x = (float)face->glyph->bitmap_left;
+    float glyph_off_y = (float)-face->glyph->bitmap_top;
+    out_glyph->X0 = glyph_off_x * recip_h + font_off_x;
+    out_glyph->Y0 = glyph_off_y * recip_v + font_off_y;
+    out_glyph->X1 = (glyph_off_x + w) * recip_h + font_off_x;
+    out_glyph->Y1 = (glyph_off_y + h) * recip_v + font_off_y;
+    out_glyph->Visible = true;
+    out_glyph->Colored = (ft_bitmap->pixel_mode == FT_PIXEL_MODE_BGRA);
+    out_glyph->PackId = pack_id;
         ImFontAtlasBakedSetFontGlyphBitmap(atlas, baked, src, out_glyph, r, (const unsigned char*)temp_buffer, ImTextureFormat_RGBA32, w * 4);
     }
 
